@@ -1,0 +1,7 @@
+user            = {{ MySQL_postfixadmin_user }}
+password        = {{ MySQL_postfixadmin_pass }}
+hosts           = {{ MySQL_postfixadmin_host }}
+dbname          = {{ MySQL_postfixadmin_db }}
+query          = SELECT domain FROM domain WHERE domain='%s' AND active = '1'
+#optional query to use when relaying for backup MX
+#query           = SELECT domain FROM domain WHERE domain='%s' AND backupmx = '0' AND active = '1'

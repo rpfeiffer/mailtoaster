@@ -1,0 +1,5 @@
+user            = {{ MySQL_postfixadmin_user }}
+password        = {{ MySQL_postfixadmin_pass }}
+hosts           = {{ MySQL_postfixadmin_host }}
+dbname          = {{ MySQL_postfixadmin_db }}
+query           = SELECT CONCAT(domain,'/',maildir) FROM mailbox WHERE username='%s' AND active = '1'

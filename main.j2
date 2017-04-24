@@ -1,0 +1,179 @@
+# See /usr/share/postfix/main.cf.dist for a commented, more complete version
+
+
+# Debian specific:  Specifying a file name will cause the first
+# line of that file to be used as the name.  The Debian default
+# is /etc/mailname.
+#myorigin = /etc/mailname
+
+smtpd_banner = Yo! ESMTP ho, ho, ho.
+biff = no
+
+# appending .domain is the MUA's job.
+append_dot_mydomain = no
+
+# Uncomment the next line to generate "delayed mail" warnings
+#delay_warning_time = 4h
+
+readme_directory = no
+
+# Errors
+double_bounce_sender = MAILER-DAEMON
+#notify_classes = bounce,policy,protocol,resource,software
+#notify_classes = bounce,resource,software
+notify_classes = resource,software
+bounce_notice_recipient = {{ postmaster_email }}
+2bounce_notice_recipient = postmaster
+#delay_notice_recipient = postmaster
+error_notice_recipient = {{ postmaster_email }}
+
+# Tar pitting
+smtpd_soft_error_limit = 3
+smtpd_hard_error_limit = 3
+smtpd_error_sleep_time = 5
+
+smtpd_client_connection_count_limit = 20
+
+# LIMITS
+bounce_size_limit = 16384
+default_process_limit = 70
+fork_delay = 1s
+header_size_limit = 32768
+queue_minfree = 104857600
+transport_retry_time = 23m
+message_size_limit = 52428800
+
+parent_domain_matches_subdomains = debug_peer_list,fast_flush_domains,mynetworks,permit_mx_backup_networks,qmqpd_authorized_clients,smtpd_access_maps
+
+## mostly anti-spam/anti-relaying
+smtpd_helo_required = yes
+smtpd_recipient_restrictions =
+        permit_mynetworks,
+        reject_unlisted_recipient,
+        check_recipient_access hash:/etc/postfix/rcpt_blacklist,
+        check_helo_access hash:/etc/postfix/helo,
+        reject_non_fqdn_sender,
+        reject_unknown_sender_domain,
+        permit_sasl_authenticated,
+        reject_unauth_destination,
+        reject_rbl_client sbl.spamhaus.org,
+        reject_rbl_client cbl.abuseat.org,
+        reject_rbl_client bl.spamcop.net,
+        reject_rbl_client http.dnsbl.sorbs.net,
+        reject_rbl_client socks.dnsbl.sorbs.net,
+        reject_rbl_client nomail.rhsbl.sorbs.net,
+        reject_rbl_client zombie.dnsbl.sorbs.net,
+        reject_rbl_client ix.dnsbl.manitu.net,
+        permit
+#	check_policy_service inet:127.0.0.1:10023, # Intended for Postgrey
+
+smtpd_sender_restrictions = reject_unknown_sender_domain,
+                            reject_non_fqdn_sender,
+                            check_sender_access hash:/etc/postfix/access.sender,
+                            permit_sasl_authenticated
+
+# Header checks
+header_checks = pcre:/etc/postfix/header-checks.pcre
+
+# TLS parameters
+smtpd_tls_cert_file       = /etc/postfix/{{ tls_cert }}
+smtpd_tls_key_file        = /etc/postfix/{{ tls_key }}
+smtpd_tls_CAfile          = /etc/postfix/{{ ca_cert }}
+smtpd_tls_loglevel        = 1
+smtpd_tls_received_header = yes
+smtpd_use_tls             = yes
+smtpd_enforce_tls         = no
+smtpd_tls_ask_ccert       = yes
+smtpd_tls_req_ccert       = no
+smtpd_tls_exclude_ciphers = aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, aECDH, EDH-DSS-DES-CBC3-SHA, EDH-RSA-DES-CDC3-SHA, KRB5-DE5
+smtpd_tls_mandatory_protocols = !SSLv2,!SSLv3
+smtpd_tls_protocols       = !SSLv2,!SSLv3
+
+smtpd_tls_dh1024_param_file = /etc/postfix/dh_2048.pem
+smtpd_tls_dh512_param_file  = /etc/postfix/dh_512.pem
+
+smtpd_starttls_timeout    = 300s
+
+smtp_tls_CApath              = /etc/ssl/certs
+smtp_tls_CAfile              = /etc/postfix/{{ ca_cert }}
+smtp_tls_cert_file           = /etc/postfix/{{ tls_cert }}
+smtp_tls_key_file            = /etc/postfix/{{ tls_key }}
+smtp_tls_loglevel            = 1
+smtp_use_tls                 = yes
+smtp_tls_note_starttls_offer = yes
+smtp_tls_exclude_ciphers     = aNULL, eNULL, EXPORT, DES, RC4, MD5, PSK, aECDH, EDH-DSS-DES-CBC3-SHA, EDH-RSA-DES-CDC3-SHA, KRB5-DE5
+smtp_tls_mandatory_protocols = !SSLv2,!SSLv3
+smtp_tls_protocols           = !SSLv2,!SSLv3
+
+tls_random_source         = dev:/dev/urandom
+
+smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+# We want clean DNS
+ignore_mx_lookup_error = no
+
+# We want EHLO if possible
+smtp_always_send_ehlo = yes
+smtp_never_send_ehlo  = no
+
+# In case nobody's home
+#smtp_skip_4xx_greeting             = yes
+smtp_skip_5xx_greeting             = yes
+smtp_skip_quit_response            = yes
+smtp_pix_workaround_delay_time     = 10s
+smtp_pix_workaround_threshold_time = 500s
+
+# Rates
+smtp_destination_concurrency_limit = 20
+smtp_destination_recipient_limit   = $default_destination_recipient_limit
+
+# VRFY
+disable_vrfy_command = yes
+
+# Amavisd
+content_filter = smtp-amavis:[127.0.0.1]:10024
+
+# See /usr/share/doc/postfix/TLS_README.gz in the postfix-doc package for
+# information on enabling SSL in the smtp client.
+
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+myhostname = {{ ansible_fqdn }}
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+mydestination = {{ ansible_fqdn }}, localdomain, localhost, localhost.localdomain, localhost
+relayhost = 
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_command = procmail -a "$EXTENSION"
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+
+# Transport maps
+transport_maps = hash:/etc/postfix/transport
+vacation_destination_recipient_limit = 1
+
+# ---------------------- VIRTUAL DOMAINS START ----------------------
+# virtual_alias_domains           = example.cem
+virtual_mailbox_domains         = proxy:mysql:/etc/postfix/mysql_virtual_domains_maps.cf
+virtual_mailbox_base            = /srv/vmail
+virtual_mailbox_maps            = proxy:mysql:/etc/postfix/mysql_virtual_mailbox_maps.cf
+virtual_alias_maps              = proxy:mysql:/etc/postfix/mysql_virtual_alias_maps.cf
+virtual_minimum_uid             = {{ vmail_uid.stdout }}
+virtual_uid_maps                = static:{{ vmail_uid.stdout }}
+virtual_gid_maps                = static:{{ vmail_gid.stdout }}
+virtual_transport               = lmtp:unix:private/dovecot-lmtp
+#dovecot_destination_recipient_limit = 1
+# ---------------------- VIRTUAL DOMAINS END ----------------------
+
+# ---------------------- SASL PART START ----------------------
+smtpd_sasl_auth_enable          = yes
+#smtpd_sasl_local_domain        = $myhostname
+smtpd_sasl_exceptions_networks  = 127.0.0.0/8
+smtpd_sasl_security_options     = noanonymous
+broken_sasl_auth_clients        = yes
+smtpd_sasl_type                 = dovecot
+# Can be an absolute path, or relative to $queue_directory
+smtpd_sasl_path                 = private/auth
+# ---------------------- SASL PART END ----------------------
+

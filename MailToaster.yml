@@ -1,0 +1,249 @@
+---
+- name: Install Postfix, Postfixadmin, MySQL/MariaDB, SpamAssassin, Amavis
+  hosts: mailserver
+  sudo: true
+  sudo_user: root
+
+  vars:
+    required_packages:
+      - amavisd-new
+      - arc
+      - arj
+      - apache2-mpm-prefork
+      - aptitude
+      - at
+      - bzip2
+      - cabextract
+      - clamav-daemon
+      - clamav-freshclam
+      - dovecot-antispam
+      - dovecot-imapd
+      - dovecot-lmtpd
+      - dovecot-mysql
+      - dovecot-sieve
+      - dnsutils
+      - fail2ban
+      - htop
+      - libapache2-mod-php5
+      - libemail-valid-perl
+      - libio-tee-perl
+      - liblog-log4perl-perl
+      - libmail-imapclient-perl
+      - libmail-sender-perl
+      - libmime-encwords-perl
+      - libunicode-string-perl
+      - lrzip
+      - lzma
+      - lzop
+      - mysql-client
+      - mysql-server
+      - openntpd
+      - pax
+      - pax-utils
+      - p7zip-full
+      - php5-imap
+      - php5-mcrypt
+      - php5-mysql
+      - php5-tidy
+      - php5-xsl
+      - postfixadmin
+      - postfix
+      - postfix-ldap
+      - postfix-mysql
+      - postfix-pcre
+      - postgrey
+      - procinfo
+      - pwgen
+      - ripole
+      - rpm2cpio
+      - rsync
+      - spamassassin
+      - tnef
+      - unattended-upgrades
+      - unrar
+      - unzip
+      - vim
+      - zoo
+    MySQL_root_pass: CharlieDontSurf2017
+    MySQL_postfixadmin_db: postfixadmin
+    MySQL_postfixadmin_host: localhost
+    MySQL_postfixadmin_pass: Postfixadmin1337
+    MySQL_postfixadmin_user: postfixadmin
+    postmaster_email: sysadmin@example.net
+    primary_domain: example.net
+    tls_cert: tls.cert
+    tls_key: tls.key
+    ca_cert: ca.pem
+
+  tasks:
+    - name: Upgrading all packages
+      apt: update_cache=yes upgrade=safe
+
+    - name: Purging ntp package (to be replaced by openntpd)
+      apt: pkg=ntp state=absent
+
+    - name: Set MySQL/MariaDB root password before installing
+      debconf: name='mysql-server' question='mysql-server/root_password' value=""{{MySQL_root_pass | quote}}"" vtype='password'
+
+    - name: Confirm MySQL/MariaDB root password before installing
+      debconf: name='mysql-server' question='mysql-server/root_password_again' value=""{{MySQL_root_pass | quote}}"" vtype='password'
+
+    - name: Install MySQL/MariaDB server
+      apt: package="{{ item }}" state=installed force=yes update_cache=yes cache_valid_time=3600
+      when: ansible_os_family == 'Debian'
+      with_items:
+        - mysql-client
+        - mysql-server
+        - python-mysqldb
+
+    - name: Secure MySQL/MariaDB root user by limiting access
+      mysql_user: user="root" password="{{ MySQL_root_pass }}" host="{{ item }}" login_password="{{ MySQL_root_pass }}" login_user=root
+      with_items:
+        - 127.0.0.1
+        - localhost
+
+    - name: Delete anonymous MySQL/MariaDB logins for localhost
+      mysql_user: user="" state="absent" host=127.0.0.1 login_password="{{ MySQL_root_pass }}" login_user=root
+
+    - name: Remove test database
+      mysql_db: db=test state=absent login_password="{{ MySQL_root_pass }}" login_user=root
+
+    - name: Create alternative test database (for tests, obviously)
+      mysql_db: db=testing state=present login_password="{{ MySQL_root_pass }}" login_user=root
+
+    - name: Create Postfixadmin database
+      mysql_db: db=postfixadmin state=present login_password="{{ MySQL_root_pass }}" login_user=root
+
+    - name: Create Postfixadmin database user
+      mysql_user: user="postfixadmin" password="{{ MySQL_postfixadmin_pass }}" host="{{ item }}" priv=postfixadmin.*:ALL login_password="{{MySQL_root_pass}}" login_user=root
+      with_items:
+        - 127.0.0.1
+        - localhost
+        - ::1
+        - "{{ ansible_fqdn }}"
+
+    - name: Installing required packages
+      apt: pkg="{{ item }}" state=installed update_cache=true force=true
+      with_items:
+        - "{{ required_packages }}"
+      when: ansible_os_family == 'Debian'
+
+    - name: Creating DH 512 parameters for Postfix
+      shell: openssl dhparam -rand /dev/urandom -out /etc/postfix/dh_512.pem -2 512 2> /dev/null executable=/bin/bash creates=/etc/postfix/dh_512.pem
+      async: 120
+      poll: 30
+
+    - name: Creating DH 2048 parameters for Postfix
+      shell: openssl dhparam -rand /dev/urandom -out /etc/postfix/dh_2048.pem -2 2048 2> /dev/null executable=/bin/bash creates=/etc/postfix/dh_2048.pem
+      async: 120
+      poll: 30
+
+    - name: Purge Exim4 package(s)
+      apt: pkg="{{ item }}" state=absent purge=true
+      with_items:
+        - exim4
+        - exim4-base
+        - exim4-config
+        - mlocate
+        - rpcbind
+      when: ansible_os_family == 'Debian'
+
+    - name: Create Vacation group
+      group: name=vacation state=present
+
+    - name: Create Vacation account
+      user: name=vacation comment="Postfixadmin Vacation Account" group=vacation home=/var/spool/vacation system=yes state=present
+
+    - name: Create vmail account for storing virtual mailboxes
+      user: name=vmail comment="Virtual Mail User for Storage" group=mail home=/srv/vmail system=yes state=present
+
+    - name: Register vmail account UID as variable
+      shell: id -u vmail
+      register: vmail_uid
+
+    - name: Register vmail account GID as variable
+      shell: id -g vmail
+      register: vmail_gid
+
+    - name: Set Vacation home directory permissions
+      file: path=/var/spool/vacation owner=vacation group=vacation mode=0750 state=directory
+
+    - name: Copy vacation mailer script to server
+      template: src=vacation.pl.j2 dest=/var/spool/vacation/vacation.pl owner=vacation group=vacation mode=0700
+
+    - name: Copy access.sender
+      copy: src=access.sender dest=/etc/postfix/access.sender owner=root group=root mode=0644
+
+    - name: Copy header checks
+      copy: src=header-checks.pcre dest=/etc/postfix/header-checks.pcre owner=root group=root mode=0644
+
+    - name: Copy Postfix master.cf file
+      copy: src=master.cf dest=/etc/postfix/master.cf owner=root group=root mode=0644
+
+    - name: Copy recipient blacklist
+      copy: src=rcpt_blacklist dest=/etc/postfix/rcpt_blacklist owner=root group=root mode=0644
+
+    - name: Copy amavisd-new core configuration
+      copy: src=20-debian_defaults dest=/etc/amavis/conf.d/20-debian_defaults owner=root group=root mode=0644
+
+    - name: Copy/create transport map for the PostfixAdmin vacation mailer
+      template: src=transport.j2 dest=/etc/postfix/transport owner=root group=root mode=0644
+
+    - name: Copy CA certificate
+      copy: src="{{ ca_cert }}" dest=/etc/postfix/"{{ ca_cert }}" owner=root group=root mode=0644
+
+    - name: Copy X.509 certificate
+      copy: src="{{ tls_cert }}" dest=/etc/postfix/"{{ tls_cert }}" owner=root group=root mode=0644
+
+    - name: Copy X.509 key
+      copy: src="{{ tls_key }}" dest=/etc/postfix/"{{ tls_key }}" owner=root group=root mode=0640
+
+    - name: Copy X.509 certificate
+      copy: src="{{ tls_cert }}" dest=/etc/dovecot/"{{ tls_cert }}" owner=root group=root mode=0644
+
+    - name: Copy X.509 key
+      copy: src="{{ tls_key }}" dest=/etc/dovecot/"{{ tls_key }}" owner=root group=root mode=0640
+
+    - name: Update/create access.sender map
+      shell: postmap /etc/postfix/access.sender executable=/bin/bash creates=/etc/postfix/access.sender.db
+
+    - name: Update/create recipient blacklist map
+      shell: postmap /etc/postfix/rcpt_blacklist executable=/bin/bash creates=/etc/postfix/rcpt_blacklist.db
+
+    - name: Update/create transport map
+      shell: postmap /etc/postfix/transport executable=/bin/bash creates=/etc/postfix/transport.db
+
+    - name: Create Postfix virtual alias mapping
+      template: src=mysql_virtual_alias_maps.j2 dest=/etc/postfix/mysql_virtual_alias_maps.cf owner=root group=root mode=0600
+
+    - name: Create Postfix virtual domain mapping
+      template: src=mysql_virtual_domains_maps.j2 dest=/etc/postfix/mysql_virtual_domains_maps.cf owner=root group=root mode=0600
+
+    - name: Create Postfix virtual mailbox mapping
+      template: src=mysql_virtual_mailbox_maps.j2 dest=/etc/postfix/mysql_virtual_mailbox_maps.cf owner=root group=root mode=0600
+
+    - name: Create Dovecot sql.conf
+      template: src=sql.j2 dest=/etc/dovecot/sql.conf owner=root group=root mode=0640
+
+    - name: Create Dovecot mail configuration
+      template: src=10-mail.conf.j2 dest=/etc/dovecot/conf.d/10-mail.conf owner=root group=root mode=0644
+
+    - name: Create Dovecot master configuration
+      template: src=10-master.conf.j2 dest=/etc/dovecot/conf.d/10-master.conf owner=root group=root mode=0644
+
+    - name: Create Dovecot TLS configuration
+      template: src=10-ssl.conf.j2 dest=/etc/dovecot/conf.d/10-ssl.conf owner=root group=root mode=0644
+
+    - name: Create Dovecot mailbox configuration
+      template: src=15-mailboxes.conf.j2 dest=/etc/dovecot/conf.d/15-mailboxes.conf owner=root group=root mode=0644
+
+    - name: Create setup password for Postfixadmin
+      shell: pwgen -B -s 64 1
+      register: postfixadmin_pw
+
+    - name: Create Postfixadmin init config
+      template: src=config.inc.php.j2 dest=/etc/postfixadmin/config.inc.php owner=root group=root mode=0644
+
+    - name: Create Postfixadmin database config
+      template: src=dbconfig.inc.php.j2 dest=/etc/postfixadmin/dbconfig.inc.php owner=root group=www-data mode=0640
+

@@ -1,0 +1,9 @@
+driver = mysql
+default_pass_scheme = MD5
+connect = host={{ MySQL_postfixadmin_host }} dbname={{ MySQL_postfixadmin_db }} user={{ MySQL_postfixadmin_user }} password={{ MySQL_postfixadmin_pass }}
+user_query = SELECT concat('/srv/vmail/', maildir) as home, concat('maildir:/srv/vmail/', maildir) as mail, {{ vmail_uid.stdout }} AS uid, {{ vmail_gid.stdout }} AS gid, concat('maildir:storage=', quota) AS quota FROM mailbox WHERE username = '%u' AND active = '1'
+# fast but now so nice:-)
+#user_query = SELECT '/srv/email/%d/%n' as home, 'maildir:/srv/email/%d/%n' as mail, 101 AS uid, 12 AS gid, concat('dirsize:storage=', quota) AS quota FROM mailbox WHERE username = '%u' AND active = '1'
+password_query = SELECT username AS user, concat('{MD5}',password) AS password, concat('/srv/vmail/', maildir) AS userdb_home, concat('maildir:/srv/vmail/', maildir) AS userdb_mail, {{ vmail_uid.stdout }} AS userdb_uid, {{ vmail_gid.stdout }} AS userdb_gid FROM mailbox WHERE username = '%u' AND active = '1'
+# fast but now so nice:-)
+#password_query = SELECT username as user, password, '/srv/email/%d/%n' as userdb_home, 'maildir:/srv/email/%d/%n' as userdb_mail, 101 as userdb_uid, 12 as userdb_gid FROM mailbox WHERE username = '%u' AND active = '1'

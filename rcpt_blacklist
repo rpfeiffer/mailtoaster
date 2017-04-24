@@ -1,0 +1,28 @@
+## blacklist fuer recipients -- hauptsaechlich fuer system-accounts
+## zieht nur bei smtp
+daemon		REJECT
+bin		REJECT
+sys		REJECT
+sync		REJECT
+man		REJECT
+mail		REJECT
+www-data	REJECT
+backup		REJECT
+nobody		REJECT
+sshd		REJECT
+smmsp		REJECT
+mysql		REJECT
+games		REJECT
+postfix		REJECT
+yasad		REJECT
+lp		REJECT
+news		REJECT
+uucp		REJECT
+proxy		REJECT
+irc		REJECT
+gnats		REJECT
+bind		REJECT
+list		REJECT
+gabriel		REJECT
+info		REJECT
+sales		REJECT

@@ -1,0 +1,8 @@
+/^Subject: .*Make Money Fast!/ REJECT Goodbye.
+/^From: .*Francesco Cardeloni" <aon.912148660@aon.at>/ REJECT Goodbye.
+/^From: .*<aon.912148660@aon.at>/ REJECT Goodbye.
+/^X-Spam-Q-Flag: .*YES/ DISCARD Discarded q/spam.
+/^List-Post: .*<mailto:south@south-africa-online.org>/ REJECT My hovercraft is full of eels.
+/^From:.*rr.use.cc.*/ REJECT No address spam
+/^From:.*de.cc.*/ REJECT No address spam
+/^From:.*bote.com.*/ REJECT No address spam
